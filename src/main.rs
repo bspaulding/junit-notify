@@ -1,0 +1,150 @@
+use hotwatch::{Event, Hotwatch};
+use notify_rust::Notification;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::PathBuf;
+use xml::reader::{EventReader, XmlEvent};
+
+#[derive(Debug)]
+struct TestSuite {
+    name: String,
+    tests: u32,
+    failures: u32,
+    errors: u32,
+}
+
+fn test_report_message(suites: Vec<TestSuite>) -> String {
+    let tests: u32 = suites.iter().map(|s| s.tests).sum();
+    let failures: u32 = suites.iter().map(|s| s.failures).sum();
+    let errors: u32 = suites.iter().map(|s| s.errors).sum();
+    let failed_suites = suites.iter().filter(|s| s.failures > 0);
+    let mut failed_suites_str = String::from("Failed Suites:\n");
+    for suite in failed_suites {
+        failed_suites_str.push_str(" - ");
+        failed_suites_str.push_str(&suite.name);
+        failed_suites_str.push_str("\n");
+    }
+
+    let fail_icon = "❌";
+    let success_icon = "✅";
+    let error_icon = "⚠️";
+    let icon = if failures > 0 {
+        fail_icon
+    } else if errors > 0 {
+        error_icon
+    } else {
+        success_icon
+    };
+    format!(
+        "{} {} tests, {} failures, {} errors\n\n{}",
+        icon, tests, failures, errors, failed_suites_str
+    )
+}
+
+fn main() {
+    let mut hotwatch = Hotwatch::new().expect("Failed to initialize watcher!");
+    let dir = "/Users/bspaulding/src/sbt-notify/target/test-reports";
+    hotwatch
+        .watch(dir, |event: Event| {
+            if let Event::Write(path) = event {
+                println!("Got write event: {:?}", &path);
+                match read_test_suites_from_report(&path) {
+                    Ok(suites) => {
+                        println!("Found suites: {:?}", suites);
+                        notify_suites(suites);
+                    }
+                    Err(error) => {
+                        println!("Error parsing suites {:?}", error);
+                    }
+                }
+            }
+        })
+        .expect("Failed to initialize watcher for directory");
+    println!("Watching for junit files in {}...", dir);
+
+    loop {}
+}
+
+fn notify_suites(suites: Vec<TestSuite>) {
+    if suites.len() == 0 {
+        return;
+    }
+
+    Notification::new()
+        .summary("Test Report")
+        .body(&test_report_message(suites))
+        .show()
+        .expect("oops");
+}
+
+fn read_test_suites_from_report(path: &PathBuf) -> Result<Vec<TestSuite>, std::io::Error> {
+    let file = File::open(path).unwrap();
+    let file = BufReader::new(file);
+    let parser = EventReader::new(file);
+    let mut suites = vec![];
+    // let suites = vec![
+    //     TestSuite {
+    //         name: String::from("Test 1"),
+    //         tests: 1,
+    //         failures: 1,
+    //         errors: 0,
+    //     },
+    //     TestSuite {
+    //         name: String::from("Test 2"),
+    //         tests: 1,
+    //         failures: 1,
+    //         errors: 0,
+    //     },
+    // ];
+    for event in parser {
+        match event {
+            Ok(XmlEvent::StartElement {
+                name, attributes, ..
+            }) => {
+                if name.local_name == "testsuite" {
+                    println!("found a testsuite element, attributes: {:?}", attributes);
+                    let name = attributes
+                        .iter()
+                        .find(|a| a.name.local_name == "name")
+                        .map(|a| a.value.clone())
+                        .unwrap_or(String::from("Untitled"));
+                    let tests = attributes
+                        .iter()
+                        .find(|a| a.name.local_name == "tests")
+                        .map(|a| a.value.clone())
+                        .unwrap_or(String::from("0"))
+                        .parse()
+                        .unwrap_or(0);
+                    let failures = attributes
+                        .iter()
+                        .find(|a| a.name.local_name == "failures")
+                        .map(|a| a.value.clone())
+                        .unwrap_or(String::from("0"))
+                        .parse()
+                        .unwrap_or(0);
+                    let errors = attributes
+                        .iter()
+                        .find(|a| a.name.local_name == "errors")
+                        .map(|a| a.value.clone())
+                        .unwrap_or(String::from("0"))
+                        .parse()
+                        .unwrap_or(0);
+
+                    suites.push(TestSuite {
+                        name,
+                        tests,
+                        failures,
+                        errors,
+                    });
+                }
+            }
+            Err(e) => {
+                println!("Parsing Error: {}", e);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(suites)
+}
