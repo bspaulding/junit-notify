@@ -1,5 +1,6 @@
 use hotwatch::{Event, Hotwatch};
 use notify_rust::Notification;
+use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -42,15 +43,15 @@ fn test_report_message(suites: Vec<TestSuite>) -> String {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let dir = &args[1];
+
     let mut hotwatch = Hotwatch::new().expect("Failed to initialize watcher!");
-    let dir = "/Users/bspaulding/src/sbt-notify/target/test-reports";
     hotwatch
         .watch(dir, |event: Event| {
             if let Event::Write(path) = event {
-                println!("Got write event: {:?}", &path);
                 match read_test_suites_from_report(&path) {
                     Ok(suites) => {
-                        println!("Found suites: {:?}", suites);
                         notify_suites(suites);
                     }
                     Err(error) => {
@@ -82,20 +83,6 @@ fn read_test_suites_from_report(path: &PathBuf) -> Result<Vec<TestSuite>, std::i
     let file = BufReader::new(file);
     let parser = EventReader::new(file);
     let mut suites = vec![];
-    // let suites = vec![
-    //     TestSuite {
-    //         name: String::from("Test 1"),
-    //         tests: 1,
-    //         failures: 1,
-    //         errors: 0,
-    //     },
-    //     TestSuite {
-    //         name: String::from("Test 2"),
-    //         tests: 1,
-    //         failures: 1,
-    //         errors: 0,
-    //     },
-    // ];
     for event in parser {
         match event {
             Ok(XmlEvent::StartElement {
