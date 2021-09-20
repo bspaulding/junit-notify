@@ -45,8 +45,8 @@ fn test_report_message(suites: Vec<TestSuite>) -> String {
     let errors: u32 = suites.iter().map(|s| s.errors).sum();
 
     format!(
-        "{} {} tests, {} failures, {} errors\n\n{}",
-        icon(failures, errors), tests, failures, errors, failed_suites_str(suites)
+        "{} {} tests, {} failures, {} errors",
+        icon(failures, errors), tests, failures, errors
     )
 }
 
