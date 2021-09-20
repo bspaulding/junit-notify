@@ -14,10 +14,7 @@ struct TestSuite {
     errors: u32,
 }
 
-fn test_report_message(suites: Vec<TestSuite>) -> String {
-    let tests: u32 = suites.iter().map(|s| s.tests).sum();
-    let failures: u32 = suites.iter().map(|s| s.failures).sum();
-    let errors: u32 = suites.iter().map(|s| s.errors).sum();
+fn failed_suites_str(suites: Vec<TestSuite>) -> String {
     let failed_suites = suites.iter().filter(|s| s.failures > 0);
     let mut failed_suites_str = String::from("Failed Suites:\n");
     for suite in failed_suites {
@@ -25,20 +22,31 @@ fn test_report_message(suites: Vec<TestSuite>) -> String {
         failed_suites_str.push_str(&suite.name);
         failed_suites_str.push_str("\n");
     }
+    failed_suites_str
+}
 
+fn icon(failures: u32, errors: u32) -> &'static str {
     let fail_icon = "❌";
     let success_icon = "✅";
     let error_icon = "⚠️";
-    let icon = if failures > 0 {
+
+    if failures > 0 {
         fail_icon
     } else if errors > 0 {
         error_icon
     } else {
         success_icon
-    };
+    }
+}
+
+fn test_report_message(suites: Vec<TestSuite>) -> String {
+    let tests: u32 = suites.iter().map(|s| s.tests).sum();
+    let failures: u32 = suites.iter().map(|s| s.failures).sum();
+    let errors: u32 = suites.iter().map(|s| s.errors).sum();
+
     format!(
         "{} {} tests, {} failures, {} errors\n\n{}",
-        icon, tests, failures, errors, failed_suites_str
+        icon(failures, errors), tests, failures, errors, failed_suites_str(suites)
     )
 }
 
@@ -78,6 +86,14 @@ fn notify_suites(suites: Vec<TestSuite>) {
         .expect("oops");
 }
 
+fn get_attribute_value(attributes: &Vec<xml::attribute::OwnedAttribute>, attr_name: &str, default_value: &str) -> String {
+    attributes
+        .iter()
+        .find(|a| a.name.local_name == attr_name)
+        .map(|a| a.value.clone())
+        .unwrap_or(String::from(default_value))
+}
+
 fn read_test_suites_from_report(path: &PathBuf) -> Result<Vec<TestSuite>, std::io::Error> {
     let file = File::open(path).unwrap();
     let file = BufReader::new(file);
@@ -89,39 +105,11 @@ fn read_test_suites_from_report(path: &PathBuf) -> Result<Vec<TestSuite>, std::i
                 name, attributes, ..
             }) => {
                 if name.local_name == "testsuite" {
-                    println!("found a testsuite element, attributes: {:?}", attributes);
-                    let name = attributes
-                        .iter()
-                        .find(|a| a.name.local_name == "name")
-                        .map(|a| a.value.clone())
-                        .unwrap_or(String::from("Untitled"));
-                    let tests = attributes
-                        .iter()
-                        .find(|a| a.name.local_name == "tests")
-                        .map(|a| a.value.clone())
-                        .unwrap_or(String::from("0"))
-                        .parse()
-                        .unwrap_or(0);
-                    let failures = attributes
-                        .iter()
-                        .find(|a| a.name.local_name == "failures")
-                        .map(|a| a.value.clone())
-                        .unwrap_or(String::from("0"))
-                        .parse()
-                        .unwrap_or(0);
-                    let errors = attributes
-                        .iter()
-                        .find(|a| a.name.local_name == "errors")
-                        .map(|a| a.value.clone())
-                        .unwrap_or(String::from("0"))
-                        .parse()
-                        .unwrap_or(0);
-
                     suites.push(TestSuite {
-                        name,
-                        tests,
-                        failures,
-                        errors,
+                        name: get_attribute_value(&attributes, "name", "Untitled"),
+                        tests: get_attribute_value(&attributes, "tests", "0").parse().unwrap_or(0),
+                        failures: get_attribute_value(&attributes, "failures", "0").parse().unwrap_or(0),
+                        errors: get_attribute_value(&attributes, "errors", "0").parse().unwrap_or(0),
                     });
                 }
             }
