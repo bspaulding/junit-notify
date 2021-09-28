@@ -14,17 +14,6 @@ struct TestSuite {
     errors: u32,
 }
 
-fn failed_suites_str(suites: Vec<TestSuite>) -> String {
-    let failed_suites = suites.iter().filter(|s| s.failures > 0);
-    let mut failed_suites_str = String::from("Failed Suites:\n");
-    for suite in failed_suites {
-        failed_suites_str.push_str(" - ");
-        failed_suites_str.push_str(&suite.name);
-        failed_suites_str.push_str("\n");
-    }
-    failed_suites_str
-}
-
 fn icon(failures: u32, errors: u32) -> &'static str {
     let fail_icon = "❌";
     let success_icon = "✅";
