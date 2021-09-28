@@ -35,7 +35,10 @@ fn test_report_message(suites: Vec<TestSuite>) -> String {
 
     format!(
         "{} {} tests, {} failures, {} errors",
-        icon(failures, errors), tests, failures, errors
+        icon(failures, errors),
+        tests,
+        failures,
+        errors
     )
 }
 
@@ -75,7 +78,11 @@ fn notify_suites(suites: Vec<TestSuite>) {
         .expect("oops");
 }
 
-fn get_attribute_value(attributes: &Vec<xml::attribute::OwnedAttribute>, attr_name: &str, default_value: &str) -> String {
+fn get_attribute_value(
+    attributes: &Vec<xml::attribute::OwnedAttribute>,
+    attr_name: &str,
+    default_value: &str,
+) -> String {
     attributes
         .iter()
         .find(|a| a.name.local_name == attr_name)
@@ -96,9 +103,15 @@ fn read_test_suites_from_report(path: &PathBuf) -> Result<Vec<TestSuite>, std::i
                 if name.local_name == "testsuite" {
                     suites.push(TestSuite {
                         name: get_attribute_value(&attributes, "name", "Untitled"),
-                        tests: get_attribute_value(&attributes, "tests", "0").parse().unwrap_or(0),
-                        failures: get_attribute_value(&attributes, "failures", "0").parse().unwrap_or(0),
-                        errors: get_attribute_value(&attributes, "errors", "0").parse().unwrap_or(0),
+                        tests: get_attribute_value(&attributes, "tests", "0")
+                            .parse()
+                            .unwrap_or(0),
+                        failures: get_attribute_value(&attributes, "failures", "0")
+                            .parse()
+                            .unwrap_or(0),
+                        errors: get_attribute_value(&attributes, "errors", "0")
+                            .parse()
+                            .unwrap_or(0),
                     });
                 }
             }
