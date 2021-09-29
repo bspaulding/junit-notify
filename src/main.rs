@@ -1,9 +1,9 @@
+use clap::{crate_version, App, Arg};
 use hotwatch::{Event, Hotwatch};
 use log::{debug, error};
 use notify_rust::Notification;
 use simple_logger::SimpleLogger;
 use std::collections::HashMap;
-use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -128,8 +128,17 @@ fn main() {
         .init()
         .unwrap();
 
-    let args: Vec<String> = env::args().collect();
-    let dir = &args[1];
+    let matches = App::new("junit-notify")
+        .version(crate_version!())
+        .author("Bradley J. Spaulding")
+        .about("Watch a directory containing junit xml reports, and emit OS notifications upon changes.")
+        .arg(Arg::with_name("dir")
+            .help("The directory to watch, containing junit xml reports")
+            .required(true)
+            .index(1))
+        .get_matches();
+    let dir = matches.value_of("dir").unwrap();
+
     let mut suites: HashMap<String, TestSuite> = HashMap::new();
 
     let mut hotwatch = Hotwatch::new().expect("Failed to initialize watcher!");
