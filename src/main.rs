@@ -1,5 +1,6 @@
 use hotwatch::{Event, Hotwatch};
 use notify_rust::Notification;
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
@@ -8,6 +9,7 @@ use xml::reader::{EventReader, XmlEvent};
 
 #[derive(Debug)]
 struct TestSuite {
+    path: String,
     name: String,
     tests: u32,
     failures: u32,
@@ -28,7 +30,7 @@ fn icon(failures: u32, errors: u32) -> &'static str {
     }
 }
 
-fn test_report_message(suites: Vec<TestSuite>) -> String {
+fn test_report_message(suites: Vec<&TestSuite>) -> String {
     let tests: u32 = suites.iter().map(|s| s.tests).sum();
     let failures: u32 = suites.iter().map(|s| s.failures).sum();
     let errors: u32 = suites.iter().map(|s| s.errors).sum();
@@ -42,21 +44,38 @@ fn test_report_message(suites: Vec<TestSuite>) -> String {
     )
 }
 
+fn update_path_and_notify(suites: &mut HashMap<String, TestSuite>, path: PathBuf) {
+    match read_test_suites_from_report(&path) {
+        Ok(new_suites) => {
+            for suite in new_suites {
+                suites.insert(String::from(&suite.path), suite);
+            }
+            notify_suites(suites.values().collect());
+        }
+        Err(error) => {
+            println!("Error parsing suites {:?}", error);
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let dir = &args[1];
+    let mut suites: HashMap<String, TestSuite> = HashMap::new();
 
     let mut hotwatch = Hotwatch::new().expect("Failed to initialize watcher!");
     hotwatch
-        .watch(dir, |event: Event| {
-            if let Event::Write(path) = event {
-                match read_test_suites_from_report(&path) {
-                    Ok(suites) => {
-                        notify_suites(suites);
-                    }
-                    Err(error) => {
-                        println!("Error parsing suites {:?}", error);
-                    }
+        .watch(dir, move |event: Event| {
+            println!("got a file event {:?}", &event);
+            match event {
+                Event::Create(path) => update_path_and_notify(&mut suites, path),
+                Event::Write(path) => update_path_and_notify(&mut suites, path),
+                Event::Remove(path) => {
+                    suites.remove(path.to_str().unwrap());
+                    notify_suites(suites.values().collect());
+                }
+                _ => {
+                    println!("Ignoring event: {:?}", event);
                 }
             }
         })
@@ -66,7 +85,7 @@ fn main() {
     loop {}
 }
 
-fn notify_suites(suites: Vec<TestSuite>) {
+fn notify_suites(suites: Vec<&TestSuite>) {
     if suites.len() == 0 {
         return;
     }
@@ -102,6 +121,7 @@ fn read_test_suites_from_report(path: &PathBuf) -> Result<Vec<TestSuite>, std::i
             }) => {
                 if name.local_name == "testsuite" {
                     suites.push(TestSuite {
+                        path: String::from(path.to_str().unwrap()),
                         name: get_attribute_value(&attributes, "name", "Untitled"),
                         tests: get_attribute_value(&attributes, "tests", "0")
                             .parse()
