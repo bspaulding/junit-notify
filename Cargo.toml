@@ -1,5 +1,7 @@
 [package]
 name = "junit-notify"
+description = "Watch a directory containing junit xml reports, and emit OS notifications upon changes."
+license = "MIT"
 version = "0.1.0"
 edition = "2018"
 
