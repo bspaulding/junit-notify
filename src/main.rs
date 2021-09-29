@@ -46,13 +46,13 @@ fn test_report_message(suites: Vec<&TestSuite>) -> String {
     )
 }
 
-fn update_path_and_notify(suites: &mut HashMap<String, TestSuite>, path: PathBuf) {
+fn update_path_and_notify(title: &str, suites: &mut HashMap<String, TestSuite>, path: PathBuf) {
     match read_test_suites_from_report(&path) {
         Ok(new_suites) => {
             for suite in new_suites {
                 suites.insert(String::from(&suite.path), suite);
             }
-            notify_suites(suites.values().collect());
+            notify_suites(title, suites.values().collect());
         }
         Err(error) => {
             error!("Error parsing suites {:?}", error);
@@ -60,13 +60,13 @@ fn update_path_and_notify(suites: &mut HashMap<String, TestSuite>, path: PathBuf
     }
 }
 
-fn notify_suites(suites: Vec<&TestSuite>) {
+fn notify_suites(title: &str, suites: Vec<&TestSuite>) {
     if suites.len() == 0 {
         return;
     }
 
     Notification::new()
-        .summary("Test Report")
+        .summary(title)
         .body(&test_report_message(suites))
         .show()
         .expect("oops");
@@ -136,23 +136,30 @@ fn main() {
             .help("The directory to watch, containing junit xml reports")
             .required(true)
             .index(1))
+        .arg(Arg::with_name("title")
+            .help("An optional title for the notifications")
+            .short("t")
+            .long("title")
+            .required(false)
+            .takes_value(true))
         .get_matches();
     let dir = matches.value_of("dir").unwrap();
+    let title = String::from(matches.value_of("title").unwrap_or("junit-notify"));
 
     let mut suites: HashMap<String, TestSuite> = HashMap::new();
 
     let mut hotwatch = Hotwatch::new().expect("Failed to initialize watcher!");
     hotwatch
         .watch(dir, move |event: Event| match event {
-            Event::Create(path) => update_path_and_notify(&mut suites, path),
-            Event::Write(path) => update_path_and_notify(&mut suites, path),
+            Event::Create(path) => update_path_and_notify(&title, &mut suites, path),
+            Event::Write(path) => update_path_and_notify(&title, &mut suites, path),
             Event::Remove(path) => {
                 suites.remove(path.to_str().unwrap());
-                notify_suites(suites.values().collect());
+                notify_suites(&title, suites.values().collect());
             }
             Event::Rename(old_path, new_path) => {
                 suites.remove(old_path.to_str().unwrap());
-                update_path_and_notify(&mut suites, new_path);
+                update_path_and_notify(&title, &mut suites, new_path);
             }
             _ => {
                 debug!("Ignoring event: {:?}", event);
