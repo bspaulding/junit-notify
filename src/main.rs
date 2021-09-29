@@ -1,5 +1,7 @@
 use hotwatch::{Event, Hotwatch};
+use log::{debug, error};
 use notify_rust::Notification;
+use simple_logger::SimpleLogger;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -53,36 +55,9 @@ fn update_path_and_notify(suites: &mut HashMap<String, TestSuite>, path: PathBuf
             notify_suites(suites.values().collect());
         }
         Err(error) => {
-            println!("Error parsing suites {:?}", error);
+            error!("Error parsing suites {:?}", error);
         }
     }
-}
-
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let dir = &args[1];
-    let mut suites: HashMap<String, TestSuite> = HashMap::new();
-
-    let mut hotwatch = Hotwatch::new().expect("Failed to initialize watcher!");
-    hotwatch
-        .watch(dir, move |event: Event| {
-            println!("got a file event {:?}", &event);
-            match event {
-                Event::Create(path) => update_path_and_notify(&mut suites, path),
-                Event::Write(path) => update_path_and_notify(&mut suites, path),
-                Event::Remove(path) => {
-                    suites.remove(path.to_str().unwrap());
-                    notify_suites(suites.values().collect());
-                }
-                _ => {
-                    println!("Ignoring event: {:?}", event);
-                }
-            }
-        })
-        .expect("Failed to initialize watcher for directory");
-    println!("Watching for junit files in {}...", dir);
-
-    loop {}
 }
 
 fn notify_suites(suites: Vec<&TestSuite>) {
@@ -144,4 +119,38 @@ fn read_test_suites_from_report(path: &PathBuf) -> Result<Vec<TestSuite>, std::i
     }
 
     Ok(suites)
+}
+
+fn main() {
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Error)
+        .env()
+        .init()
+        .unwrap();
+
+    let args: Vec<String> = env::args().collect();
+    let dir = &args[1];
+    let mut suites: HashMap<String, TestSuite> = HashMap::new();
+
+    let mut hotwatch = Hotwatch::new().expect("Failed to initialize watcher!");
+    hotwatch
+        .watch(dir, move |event: Event| match event {
+            Event::Create(path) => update_path_and_notify(&mut suites, path),
+            Event::Write(path) => update_path_and_notify(&mut suites, path),
+            Event::Remove(path) => {
+                suites.remove(path.to_str().unwrap());
+                notify_suites(suites.values().collect());
+            }
+            Event::Rename(old_path, new_path) => {
+                suites.remove(old_path.to_str().unwrap());
+                update_path_and_notify(&mut suites, new_path);
+            }
+            _ => {
+                debug!("Ignoring event: {:?}", event);
+            }
+        })
+        .expect("Failed to initialize watcher for directory");
+    println!("Watching for junit files in {}...", dir);
+
+    loop {}
 }
