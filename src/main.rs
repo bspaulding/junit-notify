@@ -47,6 +47,7 @@ fn test_report_message(suites: Vec<&TestSuite>) -> String {
 }
 
 fn update_path_and_notify(title: &str, suites: &mut HashMap<String, TestSuite>, path: PathBuf) {
+    debug!("[update_path_and_notify] path = {:?}", path);
     match read_test_suites_from_report(&path) {
         Ok(new_suites) => {
             for suite in new_suites {
@@ -121,7 +122,7 @@ fn read_test_suites_from_report(path: &PathBuf) -> Result<Vec<TestSuite>, std::i
     Ok(suites)
 }
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     SimpleLogger::new()
         .with_level(log::LevelFilter::Error)
         .env()
@@ -147,6 +148,15 @@ fn main() {
     let title = String::from(matches.value_of("title").unwrap_or("junit-notify"));
 
     let mut suites: HashMap<String, TestSuite> = HashMap::new();
+
+    // initial directory scan and parse
+    debug!("Initial directory scan...");
+    let entries = std::fs::read_dir(dir)?
+        .map(|res| res.map(|e| e.path()))
+        .collect::<Result<Vec<_>, std::io::Error>>()?;
+    for entry in entries {
+        update_path_and_notify(&title, &mut suites, entry);
+    }
 
     let mut hotwatch = Hotwatch::new().expect("Failed to initialize watcher!");
     hotwatch
