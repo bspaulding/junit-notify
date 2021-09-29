@@ -3,6 +3,7 @@ name = "junit-notify"
 description = "Watch a directory containing junit xml reports, and emit OS notifications upon changes."
 license = "MIT"
 version = "0.1.0"
+repository = "https://github.com/bspaulding/junit-notify"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
